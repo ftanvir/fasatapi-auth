@@ -23,6 +23,17 @@ class Settings(BaseSettings):
     # Password reset
     RESET_TOKEN_EXPIRE_MINUTES: int = 15
 
+    # OTP
+    EMAIL_VERIFICATION_OTP_EXPIRE_MINUTES: int = 10
+    PASSWORD_RESET_OTP_EXPIRE_MINUTES: int = 15
+
+    # SMTP
+    SMTP_HOST: str = "smtp.gmail.com"
+    SMTP_PORT: int = 587
+    SMTP_USER: str
+    SMTP_PASSWORD: str
+    EMAILS_FROM: str
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
