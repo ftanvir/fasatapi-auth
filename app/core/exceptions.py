@@ -63,3 +63,17 @@ class InvalidPasswordException(AppException):
 class PasswordResetTokenExpiredException(AppException):
     status_code = HTTPStatus.BAD_REQUEST
     detail = "Password reset token has expired"
+
+class PasswordMismatchException(AppException):
+    status_code = HTTPStatus.CONFLICT
+    detail = "Password mismatch"
+
+
+# ─── OTP Exception ─────────────────────────────────────────────────────────
+class InvalidOTPException(AppException):
+    status_code = HTTPStatus.BAD_REQUEST
+    detail = "Invalid OTP code"
+
+class OTPExpiredException(AppException):
+    status_code = HTTPStatus.BAD_REQUEST
+    detail = "OTP code has expired"
