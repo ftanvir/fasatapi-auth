@@ -39,6 +39,10 @@ class UserAlreadyVerifiedException(AppException):
     status_code = HTTPStatus.CONFLICT
     detail = "User already verified"
 
+class UserNotVerifiedException(AppException):
+    status_code = HTTPStatus.CONFLICT
+    detail = "User not verified"
+
 
 # ─── Token Exceptions ─────────────────────────────────────────────────────────
 

@@ -75,3 +75,24 @@ class AuthRepository:
             select(User).where(User.id == user_id)
         )
         return result.scalar_one_or_none()
+
+    async def update_user_password(
+            self,
+            user: User,
+            hashed_password: str,
+    ) -> User:
+        user.hashed_password = hashed_password
+        await self.db.flush()
+        await self.db.refresh(user)
+        return user
+
+    async def revoke_all_user_refresh_tokens(self, user_id: str) -> None:
+        await self.db.execute(
+            update(RefreshToken)
+            .where(
+                RefreshToken.user_id == user_id,
+                RefreshToken.is_revoked == False,
+            )
+            .values(is_revoked=True)
+        )
+        await self.db.flush()

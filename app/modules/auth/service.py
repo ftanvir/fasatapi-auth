@@ -6,14 +6,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import get_settings
 from app.core.email import send_otp_email
 from app.core.exceptions import UserAlreadyExistsException, UserNotFoundException, UserAlreadyVerifiedException, \
-    InvalidTokenException, RefreshTokenExpiredException
-from app.core.security import generate_otp, hash_password, generate_refresh_token, create_access_token, hash_refresh_token
+    InvalidTokenException, RefreshTokenExpiredException, OTPExpiredException, InvalidOTPException, \
+    InvalidCredentialsException, UserNotVerifiedException
+from app.core.security import generate_otp, hash_password, generate_refresh_token, create_access_token, \
+    hash_refresh_token, verify_password
 from app.db.redis import get_redis
 from app.db.session import get_db
 from app.modules.auth.model import User
 from app.modules.auth.repository import AuthRepository
 from app.modules.auth.schema import RegisterRequest, RegisterResponse, UserResponse, VerifyOTPRequest, MessageResponse, \
-    LoginRequest, LoginResponse, TokenData, RefreshTokenRequest, TokenResponse, LogoutRequest
+    LoginRequest, LoginResponse, TokenData, RefreshTokenRequest, TokenResponse, LogoutRequest, ResetPasswordRequest
 
 settings = get_settings()
 
@@ -147,11 +149,11 @@ class AuthService:
         # 1. find user by email
         user = await self.repo.get_user_by_email(payload.email)
 
-        if not user:
-            raise UserNotFoundException()
+        if not user or not verify_password(payload.password, user.hashed_password):
+            raise InvalidCredentialsException()
 
         if not user.is_verified:
-            raise UnverifiedException()
+            raise UserNotVerifiedException()
 
         access_token = create_access_token(str(user.id))
 
@@ -255,6 +257,34 @@ class AuthService:
 
             return MessageResponse(
                 status="success",
-                message="If that email exists, a reset OTP was sent.",
+                message="A reset OTP was sent.",
                 data=None,
             )
+
+    async def reset_password(self, payload: ResetPasswordRequest) -> MessageResponse:
+
+        user = await self.repo.get_user_by_email(payload.email)
+        if not user:
+            raise UserNotFoundException()
+
+        otp_key = f"password_reset:{str(user.id)}"
+        stored_otp = await self.redis.get(otp_key)
+
+        if stored_otp is None:
+            raise OTPExpiredException()
+
+        if stored_otp != payload.otp:
+            raise InvalidOTPException()
+
+        hashed_password = hash_password(payload.new_password)
+        await self.repo.update_user_password(user, hashed_password)
+
+        await self.redis.delete(otp_key)
+
+        await self.repo.revoke_all_user_refresh_tokens(str(user.id))
+
+        return MessageResponse(
+            status="success",
+            message="Password reset successful.",
+            data=None,
+        )
