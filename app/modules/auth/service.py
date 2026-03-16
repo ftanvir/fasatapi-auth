@@ -10,9 +10,10 @@ from app.core.exceptions import UserAlreadyExistsException, UserNotFoundExceptio
 from app.core.security import generate_otp, hash_password, generate_refresh_token, create_access_token, hash_refresh_token
 from app.db.redis import get_redis
 from app.db.session import get_db
+from app.modules.auth.model import User
 from app.modules.auth.repository import AuthRepository
 from app.modules.auth.schema import RegisterRequest, RegisterResponse, UserResponse, VerifyOTPRequest, MessageResponse, \
-    LoginRequest, LoginResponse, TokenData, RefreshTokenRequest, TokenResponse
+    LoginRequest, LoginResponse, TokenData, RefreshTokenRequest, TokenResponse, LogoutRequest
 
 settings = get_settings()
 
@@ -212,4 +213,22 @@ class AuthService:
                 refresh_token=new_raw_refresh_token,
                 token_type="bearer",
             ),
+        )
+
+    async def logout(self, payload: LogoutRequest, current_user: User) ->MessageResponse:
+        token_hash = hash_refresh_token(payload.refresh_token)
+        token = await self.repo.get_refresh_token_by_hash(token_hash)
+
+        if not token:
+            raise InvalidTokenException()
+
+        if str(token.user_id) != str(current_user.id):
+            raise InvalidTokenException()
+
+        await self.repo.revoke_refresh_token(token)
+
+        return MessageResponse(
+            status="success",
+            message="Logout successful.",
+            data=None,
         )
