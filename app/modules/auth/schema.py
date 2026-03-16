@@ -1,4 +1,5 @@
 from typing import Optional
+from uuid import UUID
 from pydantic import BaseModel, EmailStr, Field, model_validator
 
 class BaseResponse[DataT](BaseModel):
@@ -23,7 +24,7 @@ class UserResponse(BaseModel):
     Safe user representation — never exposes hashed_password.
     Returned after register, and available via /me later.
     """
-    id: str
+    id: UUID
     first_name: str
     last_name: str
     email: EmailStr

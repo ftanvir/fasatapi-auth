@@ -3,8 +3,8 @@ import random
 import string
 from datetime import datetime, timedelta, timezone
 
+import bcrypt
 from jose import JWTError, jwt
-from passlib.context import CryptContext
 
 from app.core.config import get_settings
 
@@ -12,20 +12,63 @@ settings = get_settings()
 
 # === Password Hashing ===================================
 
-pwd_context = CryptContext(
-    schemes=["bcrypt"],
-    deprecated="auto",
-)
+PASSWORD_HASH_PREFIX = "bcrypt_sha256$"
+BCRYPT_ROUNDS = 12
+
+
+def _prepare_password_for_bcrypt(password: str) -> bytes:
+    """
+    Pre-hash the password so bcrypt always receives a short ASCII payload.
+
+    This avoids bcrypt's 72-byte input limit for multi-byte passwords while
+    still delegating the password hash storage to bcrypt.
+    """
+    return hashlib.sha256(password.encode("utf-8")).hexdigest().encode("ascii")
+
+
+def _normalize_bcrypt_hash(hashed_password: str) -> bytes:
+    """Normalize bcrypt prefixes for compatibility with the bcrypt library."""
+    normalized = hashed_password
+    if normalized.startswith("$2y$"):
+        normalized = "$2b$" + normalized[4:]
+    return normalized.encode("utf-8")
 
 
 def hash_password(plain_password: str) -> str:
-    """Hash a plain text password using bcrypt."""
-    return pwd_context.hash(plain_password)
+    """
+    Hash a plain text password.
+
+    New hashes use SHA-256 pre-hashing before bcrypt so passwords containing
+    multi-byte characters do not fail bcrypt's 72-byte input limit.
+    """
+    prepared_password = _prepare_password_for_bcrypt(plain_password)
+    hashed_password = bcrypt.hashpw(
+        prepared_password,
+        bcrypt.gensalt(rounds=BCRYPT_ROUNDS),
+    ).decode("utf-8")
+    return f"{PASSWORD_HASH_PREFIX}{hashed_password}"
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    """Verify a plain text password against a bcrypt hash."""
-    return pwd_context.verify(plain_password, hashed_password)
+    """
+    Verify a plain text password against stored password hashes.
+
+    Supports both new SHA-256+bcrypt hashes and legacy raw bcrypt hashes.
+    """
+    try:
+        if hashed_password.startswith(PASSWORD_HASH_PREFIX):
+            prepared_password = _prepare_password_for_bcrypt(plain_password)
+            bcrypt_hash = _normalize_bcrypt_hash(
+                hashed_password.removeprefix(PASSWORD_HASH_PREFIX)
+            )
+            return bcrypt.checkpw(prepared_password, bcrypt_hash)
+
+        return bcrypt.checkpw(
+            plain_password.encode("utf-8"),
+            _normalize_bcrypt_hash(hashed_password),
+        )
+    except ValueError:
+        return False
 
 
 # ================== OTP =======================

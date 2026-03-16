@@ -24,5 +24,3 @@ class TimestampMixin:
         onupdate=lambda: datetime.now(timezone.utc),
         nullable=False,
     )
-
-from app.modules.auth.model import User, RefreshToken

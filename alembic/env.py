@@ -7,6 +7,8 @@ from sqlalchemy.ext.asyncio import create_async_engine
 from app.core.config import get_settings
 from app.db.base import Base
 
+from app.modules.auth.model import User, RefreshToken
+
 # ─── Alembic Config ───────────────────────────────────────────────────────────
 
 config = context.config
