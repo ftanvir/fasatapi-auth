@@ -3,6 +3,8 @@ from fastapi.responses import JSONResponse
 
 from app.core.exceptions import AppException
 
+from fastapi.exceptions import RequestValidationError
+
 
 def register_exception_handlers(app: FastAPI) -> None:
     """
@@ -33,5 +35,26 @@ def register_exception_handlers(app: FastAPI) -> None:
             content={
                 "success": False,
                 "detail": "An unexpected error occurred",
+            },
+        )
+
+    @app.exception_handler(RequestValidationError)
+    async def validation_exception_handler(
+            request: Request,
+            exc: RequestValidationError,
+    ) -> JSONResponse:
+        errors = [
+            {
+                "field": err["loc"][-1],  # last element is the field name
+                "message": err["msg"].replace("Value error, ", ""),
+            }
+            for err in exc.errors()
+        ]
+        return JSONResponse(
+            status_code=422,
+            content={
+                "status": "error",
+                "message": "Validation failed",
+                "data": {"errors": errors},
             },
         )
