@@ -69,3 +69,9 @@ class AuthRepository:
     async def revoke_refresh_token(self, token: RefreshToken) -> None:
         token.is_revoked = True
         await self.db.flush()
+
+    async def get_user_by_id(self, user_id: str) -> User | None:
+        result = await self.db.execute(
+            select(User).where(User.id == user_id)
+        )
+        return result.scalar_one_or_none()
