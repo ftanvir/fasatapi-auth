@@ -232,3 +232,29 @@ class AuthService:
             message="Logout successful.",
             data=None,
         )
+
+    async def forgot_password(self, email: str) -> MessageResponse:
+        user = await self.repo.get_user_by_email(email)
+
+        if user and user.is_verified and user.is_active:
+            otp = generate_otp()
+            otp_key = f"password_reset:{str(user.id)}"
+
+            await self.redis.set(
+                otp_key,
+                otp,
+                ex=settings.PASSWORD_RESET_OTP_EXPIRE_MINUTES * 60,
+            )
+
+            await send_otp_email(
+                to_email=user.email,
+                full_name=f"{user.first_name} {user.last_name}",
+                otp=otp,
+                subject="Password Reset OTP",
+            )
+
+            return MessageResponse(
+                status="success",
+                message="If that email exists, a reset OTP was sent.",
+                data=None,
+            )
