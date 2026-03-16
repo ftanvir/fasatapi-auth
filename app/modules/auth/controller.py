@@ -10,7 +10,7 @@ from app.modules.auth.service import AuthService
 from app.modules.auth.schema import (
     RegisterRequest,
     RegisterResponse, MessageResponse, VerifyOTPRequest, ResendOTPRequest, LoginResponse, LoginRequest,
-    RefreshTokenRequest, TokenResponse, LogoutRequest, EmailRequest, ResetPasswordRequest,
+    RefreshTokenRequest, TokenResponse, LogoutRequest, EmailRequest, ResetPasswordRequest, ChangePasswordRequest,
 )
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
@@ -72,3 +72,11 @@ async def reset_password(
     service: AuthService = Depends(AuthService),
 ) -> MessageResponse:
     return await service.reset_password(payload)
+
+@router.post("/change-password", response_model=MessageResponse)
+async def change_password(
+    payload: ChangePasswordRequest,
+    service: AuthService = Depends(AuthService),
+    current_user: User = Depends(get_current_user),
+) -> MessageResponse:
+    return await service.change_password(payload, current_user)

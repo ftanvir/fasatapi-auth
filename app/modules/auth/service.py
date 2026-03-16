@@ -7,7 +7,7 @@ from app.core.config import get_settings
 from app.core.email import send_otp_email
 from app.core.exceptions import UserAlreadyExistsException, UserNotFoundException, UserAlreadyVerifiedException, \
     InvalidTokenException, RefreshTokenExpiredException, OTPExpiredException, InvalidOTPException, \
-    InvalidCredentialsException, UserNotVerifiedException
+    InvalidCredentialsException, UserNotVerifiedException, InvalidPasswordException
 from app.core.security import generate_otp, hash_password, generate_refresh_token, create_access_token, \
     hash_refresh_token, verify_password
 from app.db.redis import get_redis
@@ -15,7 +15,8 @@ from app.db.session import get_db
 from app.modules.auth.model import User
 from app.modules.auth.repository import AuthRepository
 from app.modules.auth.schema import RegisterRequest, RegisterResponse, UserResponse, VerifyOTPRequest, MessageResponse, \
-    LoginRequest, LoginResponse, TokenData, RefreshTokenRequest, TokenResponse, LogoutRequest, ResetPasswordRequest
+    LoginRequest, LoginResponse, TokenData, RefreshTokenRequest, TokenResponse, LogoutRequest, ResetPasswordRequest, \
+    ChangePasswordRequest
 
 settings = get_settings()
 
@@ -286,5 +287,19 @@ class AuthService:
         return MessageResponse(
             status="success",
             message="Password reset successful.",
+            data=None,
+        )
+
+    async def change_password(self, payload: ChangePasswordRequest, current_user: User) -> MessageResponse:
+
+        if not verify_password(payload.current_password, current_user.hashed_password):
+            raise InvalidPasswordException()
+
+        hashed_password = hash_password(payload.new_password)
+        await self.repo.update_user_password(current_user, hashed_password)
+
+        return MessageResponse(
+            status="success",
+            message="Password changed successfully.",
             data=None,
         )
