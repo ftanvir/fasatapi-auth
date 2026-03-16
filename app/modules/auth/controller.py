@@ -8,6 +8,7 @@ from app.modules.auth.service import AuthService
 from app.modules.auth.schema import (
     RegisterRequest,
     RegisterResponse, MessageResponse, VerifyOTPRequest, ResendOTPRequest, LoginResponse, LoginRequest,
+    RefreshTokenRequest, TokenResponse,
 )
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
@@ -40,3 +41,10 @@ async def login(
         service: AuthService = Depends(AuthService),
 ) -> LoginResponse:
     return await service.login(payload)
+
+@router.post("/refresh-token", response_model=TokenResponse)
+async def refresh_token(
+    payload: RefreshTokenRequest,
+    service: AuthService = Depends(AuthService),
+) -> TokenResponse:
+    return await service.refresh_token(payload)

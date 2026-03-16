@@ -5,13 +5,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
 from app.core.email import send_otp_email
-from app.core.exceptions import UserAlreadyExistsException, UserNotFoundException, UserAlreadyVerifiedException
+from app.core.exceptions import UserAlreadyExistsException, UserNotFoundException, UserAlreadyVerifiedException, \
+    InvalidTokenException, RefreshTokenExpiredException
 from app.core.security import generate_otp, hash_password, generate_refresh_token, create_access_token, hash_refresh_token
 from app.db.redis import get_redis
 from app.db.session import get_db
 from app.modules.auth.repository import AuthRepository
 from app.modules.auth.schema import RegisterRequest, RegisterResponse, UserResponse, VerifyOTPRequest, MessageResponse, \
-    LoginRequest, LoginResponse, TokenData
+    LoginRequest, LoginResponse, TokenData, RefreshTokenRequest, TokenResponse
 
 settings = get_settings()
 
@@ -171,6 +172,44 @@ class AuthService:
             data=TokenData(
                 access_token=access_token,
                 refresh_token=raw_refresh_token,
+                token_type="bearer",
+            ),
+        )
+
+    async def refresh_token(self, payload: RefreshTokenRequest):
+        token_hash = hash_refresh_token(payload.refresh_token)
+        token = await self.repo.get_refresh_token_by_hash(token_hash)
+
+        if not token:
+            raise InvalidTokenException()
+
+        if token.is_revoked:
+            raise InvalidTokenException()
+
+        if datetime.now(timezone.utc) > token.expires_at:
+            raise RefreshTokenExpiredException()
+
+        new_access_token = create_access_token(str(token.user_id))
+
+        await self.repo.revoke_refresh_token(token)
+
+        new_raw_refresh_token = generate_refresh_token()
+        new_token_hash = hash_refresh_token(new_raw_refresh_token)
+        new_expires_at = datetime.now(timezone.utc) + timedelta(
+            days=settings.REFRESH_TOKEN_EXPIRE_DAYS
+        )
+        await self.repo.create_refresh_token(
+            user_id=str(token.user_id),
+            token_hash=new_token_hash,
+            expires_at=new_expires_at,
+        )
+
+        return TokenResponse(
+            status="success",
+            message="Token refreshed successfully.",
+            data=TokenData(
+                access_token=new_access_token,
+                refresh_token=new_raw_refresh_token,
                 token_type="bearer",
             ),
         )

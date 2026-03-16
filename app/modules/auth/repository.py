@@ -56,3 +56,16 @@ class AuthRepository:
         await self.db.flush()
         await self.db.refresh(token)
         return token
+
+    async def get_refresh_token_by_hash(
+            self,
+            token_hash: str,
+    ) -> RefreshToken | None:
+        result = await self.db.execute(
+            select(RefreshToken).where(RefreshToken.token_hash == token_hash)
+        )
+        return result.scalar_one_or_none()
+
+    async def revoke_refresh_token(self, token: RefreshToken) -> None:
+        token.is_revoked = True
+        await self.db.flush()
