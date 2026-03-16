@@ -7,7 +7,7 @@ from app.db.session import get_db
 from app.modules.auth.service import AuthService
 from app.modules.auth.schema import (
     RegisterRequest,
-    RegisterResponse, MessageResponse, VerifyOTPRequest, ResendOTPRequest,
+    RegisterResponse, MessageResponse, VerifyOTPRequest, ResendOTPRequest, LoginResponse, LoginRequest,
 )
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
@@ -33,3 +33,10 @@ async def resend_verification_otp(
         service: AuthService = Depends(AuthService),
 ):
     return await service.resend_verification_otp(payload.email)
+
+@router.post("/login", response_model=LoginResponse)
+async def login(
+        payload: LoginRequest,
+        service: AuthService = Depends(AuthService),
+) -> LoginResponse:
+    return await service.login(payload)

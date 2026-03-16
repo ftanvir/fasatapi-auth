@@ -1,3 +1,4 @@
+from datetime import datetime, timezone, timedelta
 import redis.asyncio as aioredis
 from fastapi import Depends
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -5,11 +6,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import get_settings
 from app.core.email import send_otp_email
 from app.core.exceptions import UserAlreadyExistsException, UserNotFoundException, UserAlreadyVerifiedException
-from app.core.security import generate_otp, hash_password
+from app.core.security import generate_otp, hash_password, generate_refresh_token, create_access_token, hash_refresh_token
 from app.db.redis import get_redis
 from app.db.session import get_db
 from app.modules.auth.repository import AuthRepository
-from app.modules.auth.schema import RegisterRequest, RegisterResponse, UserResponse, VerifyOTPRequest, MessageResponse
+from app.modules.auth.schema import RegisterRequest, RegisterResponse, UserResponse, VerifyOTPRequest, MessageResponse, \
+    LoginRequest, LoginResponse, TokenData
 
 settings = get_settings()
 
@@ -137,4 +139,38 @@ class AuthService:
             status="success",
             message="Verification OTP resent to your email.",
             data=None,
+        )
+
+    async def login(self, payload: LoginRequest) -> LoginResponse:
+        # 1. find user by email
+        user = await self.repo.get_user_by_email(payload.email)
+
+        if not user:
+            raise UserNotFoundException()
+
+        if not user.is_verified:
+            raise UnverifiedException()
+
+        access_token = create_access_token(str(user.id))
+
+        raw_refresh_token = generate_refresh_token()
+
+        token_hash = hash_refresh_token(raw_refresh_token)
+        expires_at = datetime.now(timezone.utc) + timedelta(
+            days=settings.REFRESH_TOKEN_EXPIRE_DAYS
+        )
+        await self.repo.create_refresh_token(
+            user_id=str(user.id),
+            token_hash=token_hash,
+            expires_at=expires_at,
+        )
+
+        return LoginResponse(
+            status="success",
+            message="Login successful.",
+            data=TokenData(
+                access_token=access_token,
+                refresh_token=raw_refresh_token,
+                token_type="bearer",
+            ),
         )
