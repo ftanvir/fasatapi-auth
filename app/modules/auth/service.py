@@ -4,7 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
 from app.core.email import send_otp_email
-from app.core.exceptions import UserAlreadyExistsException, UserNotFoundException
+from app.core.exceptions import UserAlreadyExistsException, UserNotFoundException, UserAlreadyVerifiedException
 from app.core.security import generate_otp, hash_password
 from app.db.redis import get_redis
 from app.db.session import get_db
@@ -101,5 +101,40 @@ class AuthService:
         return MessageResponse(
             status="success",
             message="Email verified successfully.",
+            data=None,
+        )
+
+    async def resend_verification_otp(self, email: str) ->MessageResponse:
+        # 1. find user
+        user = await self.repo.get_user_by_email(email)
+        if not user:
+            raise UserNotFoundException()
+
+        # 2. check if user already verified
+        if user.is_verified:
+            raise UserAlreadyVerifiedException()
+
+        # 3. generate fresh otp
+        otp = generate_otp()
+
+        # 4. overwrite OTP in Redis with new TTL
+        otp_key = f"email_verification:{str(user.id)}"
+        await self.redis.set(
+            otp_key,
+            otp,
+            ex=settings.EMAIL_VERIFICATION_OTP_EXPIRE_MINUTES * 60,
+        )
+
+        # 5. resend email with new otp
+        await send_otp_email(
+            to_email=user.email,
+            full_name=f"{user.first_name} {user.last_name}",
+            otp=otp,
+            subject="Verify Your Email",
+        )
+
+        return MessageResponse(
+            status="success",
+            message="Verification OTP resent to your email.",
             data=None,
         )

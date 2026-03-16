@@ -64,6 +64,9 @@ class VerifyOTPRequest(BaseModel):
         pattern=r"^\d{6}$",
     )
 
+class ResendOTPRequest(BaseModel):
+    email: EmailStr
+
 class LoginRequest(BaseModel):
     email: EmailStr
     password: str = Field(

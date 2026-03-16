@@ -35,6 +35,10 @@ class UserNotFoundException(AppException):
     status_code = HTTPStatus.NOT_FOUND
     detail = "User not found"
 
+class UserAlreadyVerifiedException(AppException):
+    status_code = HTTPStatus.CONFLICT
+    detail = "User already verified"
+
 
 # ─── Token Exceptions ─────────────────────────────────────────────────────────
 
