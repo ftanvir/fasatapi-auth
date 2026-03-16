@@ -34,3 +34,9 @@ class AuthRepository:
         await self.db.flush()
         await self.db.refresh(user)
         return user
+
+    async def update_user_verified(self, user: User) -> User:
+        user.is_verified = True
+        await self.db.flush()
+        await self.db.refresh(user)
+        return user

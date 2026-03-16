@@ -4,12 +4,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
 from app.core.email import send_otp_email
-from app.core.exceptions import UserAlreadyExistsException
+from app.core.exceptions import UserAlreadyExistsException, UserNotFoundException
 from app.core.security import generate_otp, hash_password
 from app.db.redis import get_redis
 from app.db.session import get_db
 from app.modules.auth.repository import AuthRepository
-from app.modules.auth.schema import RegisterRequest, RegisterResponse, UserResponse
+from app.modules.auth.schema import RegisterRequest, RegisterResponse, UserResponse, VerifyOTPRequest, MessageResponse
 
 settings = get_settings()
 
@@ -66,4 +66,40 @@ class AuthService:
             status="success",
             message="Registration successful. OTP sent to your email.",
             data=UserResponse.model_validate(user),
+        )
+
+    async def verify_email(self, payload: VerifyOTPRequest) -> MessageResponse:
+
+        # 1. find user
+        user = await self.repo.get_user_by_email(payload.email)
+
+        if not user:
+            raise UserNotFoundException()
+
+        # 2. check if already verified
+        if user.is_verified:
+            raise UserAlreadyExistsException()
+
+        # 3. get OTP from Redis
+        otp_key = f"email_verification:{str(user.id)}"
+        stored_otp = await self.redis.get(otp_key)
+
+        # 4. check OTP expired (key missing from Redis)
+        if stored_otp is None:
+            raise OTPExpiredException()
+
+        # 5. check OTP matches
+        if stored_otp != payload.otp:
+            raise InvalidOTPException()
+
+        # 6. mark user verified
+        await self.repo.update_user_verified(user)
+
+        # 7. delete OTP from Redis
+        await self.redis.delete(otp_key)
+
+        return MessageResponse(
+            status="success",
+            message="Email verified successfully.",
+            data=None,
         )

@@ -7,7 +7,7 @@ from app.db.session import get_db
 from app.modules.auth.service import AuthService
 from app.modules.auth.schema import (
     RegisterRequest,
-    RegisterResponse,
+    RegisterResponse, MessageResponse, VerifyOTPRequest,
 )
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
@@ -19,3 +19,10 @@ async def register(
     service: AuthService = Depends(AuthService),
 ) -> RegisterResponse:
     return await service.register(payload)
+
+@router.post("/verify-email", response_model=MessageResponse)
+async def verify_email(
+        payload: VerifyOTPRequest,
+        service: AuthService = Depends(AuthService),
+) -> MessageResponse:
+    return await service.verify_email(payload)
