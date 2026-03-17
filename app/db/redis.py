@@ -1,26 +1,35 @@
 from collections.abc import AsyncGenerator
 
-import redis.asyncio as aioredis
+from arq.connections import ArqRedis, RedisSettings, create_pool
 
 from app.core.config import get_settings
 
 settings = get_settings()
 
-# ─── Redis Client ─────────────────────────────────────────────────────────────
-
-# single client instance, connection pool managed internally
-redis_client = aioredis.from_url(
-    settings.REDIS_URL,
-    encoding="utf-8",
-    decode_responses=True,    # returns str instead of bytes
-)
+redis_pool: ArqRedis | None = None
 
 
-# ─── Dependency ───────────────────────────────────────────────────────────────
+async def get_redis_pool() -> ArqRedis:
+    global redis_pool
+    if redis_pool is None:
+        redis_settings = RedisSettings.from_dsn(settings.REDIS_URL)
+        redis_pool = await create_pool(redis_settings)
+    return redis_pool
 
-async def get_redis() -> AsyncGenerator[aioredis.Redis, None]:
-    """
-    FastAPI dependency that yields the Redis client.
-    Uses a single shared client with internal connection pooling.
-    """
-    yield redis_client
+
+async def close_redis_pool() -> None:
+    global redis_pool
+    if redis_pool is not None:
+        await redis_pool.close()
+        redis_pool = None
+
+
+async def get_redis() -> AsyncGenerator[ArqRedis, None]:
+    pool = await get_redis_pool()
+    yield pool
+
+def decode_redis_value(value: bytes | str | None) -> str | None:
+    """Decodes Redis bytes response to string."""
+    if isinstance(value, bytes):
+        return value.decode("utf-8")
+    return value

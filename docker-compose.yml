@@ -5,23 +5,38 @@ services:
     ports:
       - "8000:8000"
     volumes:
-      - .:/app                  # mounts local code → hot reload works
+      - .:/app
     env_file:
       - .env
     depends_on:
       db:
-        condition: service_healthy    # waits until postgres is ready
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  worker:
+    build: .
+    container_name: fastapi_auth_worker
+    command: python run_worker.py
+    volumes:
+      - .:/app
+    env_file:
+      - .env
+    depends_on:
+      redis:
+        condition: service_healthy
     restart: unless-stopped
 
   db:
     image: postgres:16-alpine
     container_name: fastapi_auth_db
     ports:
-      - "5432:5432"             # expose so you can connect via DBeaver/pgAdmin
+      - "5432:5432"
     env_file:
       - .env
     volumes:
-      - postgres_data:/var/lib/postgresql/data    # persists data
+      - postgres_data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 5s
@@ -33,9 +48,9 @@ services:
     image: redis:7-alpine
     container_name: fastapi_auth_redis
     ports:
-      - "6379:6379"      # expose so you can connect via RedisInsight
+      - "6379:6379"
     volumes:
-        - redis_data:/data    # persists data
+      - redis_data:/data
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s

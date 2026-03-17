@@ -10,7 +10,7 @@ from app.core.exceptions import UserAlreadyExistsException, UserNotFoundExceptio
     InvalidCredentialsException, UserNotVerifiedException, InvalidPasswordException
 from app.core.security import generate_otp, hash_password, generate_refresh_token, create_access_token, \
     hash_refresh_token, verify_password
-from app.db.redis import get_redis
+from app.db.redis import get_redis, decode_redis_value
 from app.db.session import get_db
 from app.modules.auth.model import User
 from app.modules.auth.repository import AuthRepository
@@ -60,12 +60,12 @@ class AuthService:
             ex=settings.EMAIL_VERIFICATION_OTP_EXPIRE_MINUTES * 60,
         )
 
-        # 6. send OTP via email
-        await send_otp_email(
-            to_email=user.email,
-            full_name=f"{user.first_name} {user.last_name}",
-            otp=otp,
-            subject="Verify Your Email",
+        # 6. enqueue send email job
+        await self.redis.enqueue_job(
+            "send_verification_otp_task",
+            user.email,
+            f"{user.first_name} {user.last_name}",
+            otp,
         )
 
         # 7. return response
@@ -89,7 +89,7 @@ class AuthService:
 
         # 3. get OTP from Redis
         otp_key = f"email_verification:{str(user.id)}"
-        stored_otp = await self.redis.get(otp_key)
+        stored_otp = decode_redis_value(await self.redis.get(otp_key))
 
         # 4. check OTP expired (key missing from Redis)
         if stored_otp is None:
@@ -132,12 +132,12 @@ class AuthService:
             ex=settings.EMAIL_VERIFICATION_OTP_EXPIRE_MINUTES * 60,
         )
 
-        # 5. resend email with new otp
-        await send_otp_email(
-            to_email=user.email,
-            full_name=f"{user.first_name} {user.last_name}",
-            otp=otp,
-            subject="Verify Your Email",
+        # 5. enqueue send email job
+        await self.redis.enqueue_job(
+            "send_verification_otp_task",
+            user.email,
+            f"{user.first_name} {user.last_name}",
+            otp,
         )
 
         return MessageResponse(
@@ -249,11 +249,11 @@ class AuthService:
                 ex=settings.PASSWORD_RESET_OTP_EXPIRE_MINUTES * 60,
             )
 
-            await send_otp_email(
-                to_email=user.email,
-                full_name=f"{user.first_name} {user.last_name}",
-                otp=otp,
-                subject="Password Reset OTP",
+            await self.redis.enqueue_job(
+                "send_password_reset_otp_task",
+                user.email,
+                f"{user.first_name} {user.last_name}",
+                otp,
             )
 
             return MessageResponse(

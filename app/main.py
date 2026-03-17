@@ -1,18 +1,22 @@
-from fastapi import FastAPI
 from contextlib import asynccontextmanager
 
+from fastapi import FastAPI
+
+from app.api.v1.router import v1_router
 from app.core.config import get_settings
 from app.core.handlers import register_exception_handlers
-from app.db.redis import redis_client
-from app.api.v1.router import v1_router
+from app.db.redis import close_redis_pool, get_redis_pool
 
 settings = get_settings()
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # startup — initialize Redis pool
+    await get_redis_pool()
     yield
-    await redis_client.aclose()
+    # shutdown — close Redis pool cleanly
+    await close_redis_pool()
 
 
 def create_app() -> FastAPI:
@@ -21,6 +25,7 @@ def create_app() -> FastAPI:
         debug=settings.DEBUG,
         docs_url="/docs",
         redoc_url="/redoc",
+        lifespan=lifespan,
     )
 
     register_exception_handlers(app)
